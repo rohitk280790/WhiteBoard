@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Miro | Enterprise Visual Collaboration Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body, html { margin: 0; padding: 0; overflow: hidden; height: 100%; width: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    canvas { touch-action: none; }
+    .tool-active { background-color: #eff6ff !important; color: #2563eb !important; }
+    .context-btn { @apply p-1.5 hover:bg-gray-100 rounded text-gray-600 hover:text-gray-900 transition flex items-center justify-center text-xs; }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  </style>
+</head>
+<body class="bg-[#f8f9fa] select-none relative text-slate-800 overflow-hidden">
+
+  <!-- ==================== TOP NAVIGATION DOCK ==================== -->
+  <header class="absolute top-3 left-4 right-4 z-30 flex justify-between items-center pointer-events-none">
+    
+    <!-- Left: Brand & Board Metadata -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <div class="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200">
+        <span class="font-black text-2xl tracking-tighter text-[#050038]">miro</span>
+        <div class="h-4 w-[1px] bg-slate-200 mx-1"></div>
+        <input type="text" value="Cross-Functional Roadmap" class="text-xs font-semibold text-slate-700 hover:bg-slate-50 px-1 py-0.5 rounded outline-none border border-transparent focus:border-blue-400 w-44 truncate">
+      </div>
+      
+      <button onclick="exportJSON()" class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 p-2.5 rounded-lg shadow-sm" title="Export Board State">
+        <i class="fa-solid fa-cloud-arrow-down text-xs"></i>
+      </button>
+    </div>
+
+    <!-- Center: Facilitator Toolkit (Timer, Voting, Presentation Mode) -->
+    <div class="pointer-events-auto flex items-center gap-1.5 bg-white px-2.5 py-1.5 rounded-xl shadow-sm border border-slate-200 text-xs">
+      <!-- Timer -->
+      <button onclick="toggleTimer()" id="timer-btn" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700 font-mono">
+        <i class="fa-regular fa-clock text-blue-600"></i>
+        <span id="timer-display">05:00</span>
+      </button>
+
+      <div class="h-4 w-[1px] bg-slate-200"></div>
+
+      <!-- Voting -->
+      <button onclick="openVotingModal()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700">
+        <i class="fa-solid fa-check-to-slot text-purple-600"></i>
+        <span>Voting</span>
+      </button>
+
+      <div class="h-4 w-[1px] bg-slate-200"></div>
+
+      <!-- Presentation Slides Mode -->
+      <button onclick="togglePresentationMode()" id="present-btn" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-slate-100 text-slate-700">
+        <i class="fa-solid fa-play text-emerald-600"></i>
+        <span>Present</span>
+      </button>
+      
+      <div class="h-4 w-[1px] bg-slate-200"></div>
+
+      <!-- Miro AI Engine -->
+      <button onclick="runAIAssistant()" class="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg hover:shadow-xs text-purple-800 font-medium">
+        <i class="fa-solid fa-wand-magic-sparkles text-purple-600"></i>
+        <span>Miro AI</span>
+      </button>
+    </div>
+
+    <!-- Right: Authentication & Presence Avatars -->
+    <div class="pointer-events-auto flex items-center gap-3">
+      <!-- Live Collaborator Avatars -->
+      <div class="flex items-center -space-x-1.5">
+        <div class="w-7 h-7 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs" title="Sarah (Product Lead)">SL</div>
+        <div class="w-7 h-7 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs" title="David (Engineering)">DE</div>
+        <button onclick="followLeader()" class="w-7 h-7 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs hover:scale-105" title="Follow Facilitator">★</button>
+      </div>
+
+      <!-- Real Google Sign-in Wrapper -->
+      <div id="google-auth-container">
+        <div id="g_id_onload"
+             data-client_id="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com"
+             data-callback="handleGoogleCredentialResponse"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="outline" data-text="signin_with" data-size="medium"></div>
+      </div>
+
+      <div id="user-profile-badge" class="hidden flex items-center gap-2 bg-white border border-slate-200 rounded-full px-2 py-1 shadow-sm">
+        <img id="user-avatar" src="" class="w-5 h-5 rounded-full" alt="Avatar">
+        <span id="user-name" class="text-xs font-semibold text-slate-700 max-w-[80px] truncate"></span>
+      </div>
+
+      <button class="bg-[#4262ff] hover:bg-blue-700 text-white font-semibold text-xs px-3.5 py-2 rounded-lg shadow-sm transition">
+        Share
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== CONTEXTUAL FLOATING EDIT BAR ==================== -->
+  <!-- Appears right over the selected Sticky/Shape just like in your screenshot -->
+  <div id="contextual-bar" class="absolute z-40 hidden flex items-center gap-1 bg-white border border-slate-200 shadow-xl rounded-xl p-1.5 pointer-events-auto transition-transform">
+    <!-- Switch Object Type -->
+    <button class="context-btn" title="Switch Element Type"><i class="fa-regular fa-square text-xs"></i></button>
+    <div class="h-4 w-[1px] bg-slate-200"></div>
+
+    <!-- Font Family & Size -->
+    <button class="context-btn font-serif font-bold px-1.5" title="Font">Aa</button>
+    <select id="ctx-font-size" onchange="updateSelectedTextSize(this.value)" class="text-xs bg-slate-50 border border-slate-200 rounded px-1 py-0.5 outline-none text-slate-700">
+      <option value="14">Small</option>
+      <option value="20" selected>Auto</option>
+      <option value="28">Medium</option>
+      <option value="40">Large</option>
+    </select>
+
+    <!-- Bold, Italic, Alignment -->
+    <button onclick="toggleFormat('bold')" id="ctx-bold" class="context-btn font-bold">B</button>
+    <button onclick="toggleFormat('align')" class="context-btn"><i class="fa-solid fa-align-left text-xs"></i></button>
+
+    <div class="h-4 w-[1px] bg-slate-200"></div>
+
+    <!-- Color Dropdown Pip -->
+    <div class="relative">
+      <button onclick="toggleColorFlyout()" id="ctx-color-preview" class="w-5 h-5 rounded-full border border-slate-300 shadow-inner bg-yellow-200 m-1"></button>
+      <div id="color-flyout" class="hidden absolute top-8 left-0 bg-white border border-slate-200 shadow-2xl rounded-xl p-2 grid grid-cols-4 gap-1.5 w-36 z-50">
+        <button onclick="applyElementColor('#fff9b1')" class="w-6 h-6 rounded-md bg-[#fff9b1] border border-black/10"></button>
+        <button onclick="applyElementColor('#fed766')" class="w-6 h-6 rounded-md bg-[#fed766] border border-black/10"></button>
+        <button onclick="applyElementColor('#ffccd5')" class="w-6 h-6 rounded-md bg-[#ffccd5] border border-black/10"></button>
+        <button onclick="applyElementColor('#bae6fd')" class="w-6 h-6 rounded-md bg-[#bae6fd] border border-black/10"></button>
+        <button onclick="applyElementColor('#a7f3d0')" class="w-6 h-6 rounded-md bg-[#a7f3d0] border border-black/10"></button>
+        <button onclick="applyElementColor('#d9f99d')" class="w-6 h-6 rounded-md bg-[#d9f99d] border border-black/10"></button>
+        <button onclick="applyElementColor('#ffffff')" class="w-6 h-6 rounded-md bg-[#ffffff] border border-slate-300"></button>
+        <button onclick="applyElementColor('#1e293b')" class="w-6 h-6 rounded-md bg-[#1e293b] border border-black/10"></button>
+      </div>
+    </div>
+
+    <!-- Tags, Lock, Link -->
+    <button onclick="addTagPrompt()" class="context-btn" title="Add Tag"><i class="fa-solid fa-tag text-xs"></i></button>
+    <button onclick="toggleLockSelected()" id="ctx-lock" class="context-btn" title="Lock Object"><i class="fa-solid fa-unlock text-xs"></i></button>
+    <button onclick="deleteSelected()" class="context-btn text-rose-500 hover:text-rose-700" title="Delete"><i class="fa-solid fa-trash text-xs"></i></button>
+  </div>
+
+  <!-- ==================== PRIMARY LEFT WORKSPACE TOOLBAR ==================== -->
+  <aside class="absolute left-4 top-1/2 -translate-y-1/2 z-30 flex items-start gap-2">
+    <div class="bg-white border border-slate-200 rounded-xl shadow-xl p-1.5 flex flex-col gap-1 text-slate-700">
+      
+      <!-- Selection Pointer (V) -->
+      <button id="btn-select" onclick="setPrimaryTool('select')" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100 tool-active" title="Select (V)">
+        <i class="fa-solid fa-arrow-pointer"></i>
+      </button>
+
+      <!-- Smart Pen & Drawing (P) -->
+      <button id="btn-pen" onclick="toggleLeftFlyout('pen')" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100" title="Drawing Suite">
+        <i class="fa-solid fa-pen"></i>
+      </button>
+
+      <!-- Sticky Notes (N) -->
+      <button id="btn-sticky" onclick="toggleLeftFlyout('sticky')" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100 text-amber-500" title="Sticky Notes (N)">
+        <i class="fa-solid fa-note-sticky"></i>
+      </button>
+
+      <!-- Vector Shapes & Connectors (R/L) -->
+      <button id="btn-shapes" onclick="toggleLeftFlyout('shapes')" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100" title="Shapes & Connectors">
+        <i class="fa-regular fa-square"></i>
+      </button>
+
+      <!-- Freeform Text (T) -->
+      <button id="btn-text" onclick="setPrimaryTool('text')" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100 font-serif font-bold text-base" title="Text (T)">
+        T
+      </button>
+
+      <!-- Frames & Slides (F) -->
+      <button id="btn-frame" onclick="createFrameContainer()" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100" title="Create Frame / Slide Container">
+        <i class="fa-solid fa-crop-simple"></i>
+      </button>
+
+      <!-- Template Catalog -->
+      <button onclick="openTemplateCatalog()" class="tool-btn p-2.5 rounded-lg hover:bg-slate-100 text-blue-600" title="Deploy Framework Template">
+        <i class="fa-solid fa-table-columns"></i>
+      </button>
+
+      <div class="h-[1px] bg-slate-200 my-1"></div>
+
+      <!-- Undo / Redo -->
+      <button onclick="undo()" class="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500" title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button>
+      <button onclick="redo()" class="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500" title="Redo (Ctrl+Y)"><i class="fa-solid fa-rotate-right"></i></button>
+    </div>
+
+    <!-- FLYOUT: Drawing & Smart Pen Engine (Screenshot 2 replicated) -->
+    <div id="flyout-pen" class="hidden bg-white border border-slate-200 rounded-xl shadow-2xl p-1.5 flex flex-col gap-1 text-slate-700">
+      <button onclick="setDrawingSubTool('pen')" id="sub-pen" class="p-2.5 rounded-lg bg-blue-50 text-blue-600" title="Freehand Pen"><i class="fa-solid fa-pen text-sm"></i></button>
+      <button onclick="setDrawingSubTool('smart')" id="sub-smart" class="p-2.5 rounded-lg hover:bg-slate-100 text-purple-600" title="Smart Pen (Recognizes Circles, Boxes, Triangles)"><i class="fa-solid fa-wand-magic-sparkles text-sm"></i></button>
+      <button onclick="setDrawingSubTool('highlighter')" id="sub-highlighter" class="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500" title="Highlighter"><i class="fa-solid fa-highlighter text-sm"></i></button>
+      <button onclick="setDrawingSubTool('eraser')" id="sub-eraser" class="p-2.5 rounded-lg hover:bg-slate-100 text-slate-500" title="Element Eraser"><i class="fa-solid fa-eraser text-sm"></i></button>
+      <div class="h-[1px] bg-slate-200 my-1"></div>
+      <div class="flex flex-col items-center gap-2 py-1">
+        <button onclick="setStrokeColor('#2563eb')" class="w-5 h-5 rounded-full bg-blue-600 border-2 border-white ring-2 ring-blue-500"></button>
+        <button onclick="setStrokeColor('#dc2626')" class="w-5 h-5 rounded-full bg-red-600 border-2 border-white hover:ring-2"></button>
+        <button onclick="setStrokeColor('#16a34a')" class="w-5 h-5 rounded-full bg-emerald-600 border-2 border-white hover:ring-2"></button>
+      </div>
+    </div>
+
+    <!-- FLYOUT: Sticky Note Color Palette (Screenshot 3 replicated) -->
+    <div id="flyout-sticky" class="hidden bg-white border border-slate-200 rounded-2xl shadow-2xl p-3 flex flex-col gap-2 w-48">
+      <div class="grid grid-cols-2 gap-2">
+        <button onclick="pickStickyColor('#fff9b1')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#fff9b1;"></button>
+        <button onclick="pickStickyColor('#fed766')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#fed766;"></button>
+        <button onclick="pickStickyColor('#ffccd5')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#ffccd5;"></button>
+        <button onclick="pickStickyColor('#fb7185')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#fb7185;"></button>
+        <button onclick="pickStickyColor('#f3e8ff')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#f3e8ff;"></button>
+        <button onclick="pickStickyColor('#c084fc')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#c084fc;"></button>
+        <button onclick="pickStickyColor('#dbeafe')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#dbeafe;"></button>
+        <button onclick="pickStickyColor('#93c5fd')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#93c5fd;"></button>
+        <button onclick="pickStickyColor('#a7f3d0')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#a7f3d0;"></button>
+        <button onclick="pickStickyColor('#4ade80')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#4ade80;"></button>
+        <button onclick="pickStickyColor('#ffffff')" class="h-9 rounded-lg shadow-xs border border-slate-300" style="background:#ffffff;"></button>
+        <button onclick="pickStickyColor('#1e293b')" class="h-9 rounded-lg shadow-xs border border-black/5" style="background:#1e293b;"></button>
+      </div>
+      <div class="h-[1px] bg-slate-200 my-1"></div>
+      <button onclick="openBulkStickyDialog()" class="w-full py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg">
+        Bulk Creation Mode
+      </button>
+    </div>
+
+    <!-- FLYOUT: Shapes & Orthogonal Connectors (Screenshot 1 replicated) -->
+    <div id="flyout-shapes" class="hidden bg-white border border-slate-200 rounded-xl shadow-2xl py-2 w-52 text-xs text-slate-700 flex flex-col">
+      <button onclick="pickShape('rect')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 font-medium text-blue-600">
+        <span class="flex items-center gap-2"><i class="fa-regular fa-square w-4"></i> Rectangle</span>
+        <span class="text-slate-400 font-mono">R</span>
+      </button>
+      <button onclick="pickShape('circle')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+        <span class="flex items-center gap-2"><i class="fa-regular fa-circle w-4"></i> Oval / Circle</span>
+        <span class="text-slate-400 font-mono">O</span>
+      </button>
+      <button onclick="pickShape('rhombus')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+        <span class="flex items-center gap-2"><i class="fa-regular fa-square rotate-45 scale-75 w-4"></i> Rhombus (Decision)</span>
+      </button>
+      <button onclick="pickShape('triangle')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+        <span class="flex items-center gap-2"><i class="fa-solid fa-play -rotate-90 scale-75 w-4"></i> Triangle</span>
+      </button>
+      <div class="h-[1px] bg-slate-200 my-1"></div>
+      <button onclick="pickShape('line')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+        <span class="flex items-center gap-2"><i class="fa-solid fa-minus w-4"></i> Straight Line</span>
+        <span class="text-slate-400 font-mono">L</span>
+      </button>
+      <button onclick="pickShape('arrow')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+        <span class="flex items-center gap-2"><i class="fa-solid fa-arrow-right w-4"></i> Vector Arrow</span>
+      </button>
+      <button onclick="pickShape('elbow-arrow')" class="flex items-center justify-between px-3 py-1.5 hover:bg-slate-50">
+        <span class="flex items-center gap-2"><i class="fa-solid fa-arrow-turn-down -rotate-90 w-4"></i> Orthogonal Connector</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ==================== BOTTOM-RIGHT NAVIGATION DOCK ==================== -->
+  <footer class="absolute bottom-4 right-4 z-30 flex items-center gap-1 bg-white border border-slate-200 shadow-xl rounded-xl p-1 text-slate-700 text-xs">
+    <button onclick="zoomStep(-0.15)" class="p-2 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-minus"></i></button>
+    <span id="zoom-label" class="px-2 font-mono font-semibold w-12 text-center">100%</span>
+    <button onclick="zoomStep(0.15)" class="p-2 hover:bg-slate-100 rounded-lg"><i class="fa-solid fa-plus"></i></button>
+    <div class="h-4 w-[1px] bg-slate-200 mx-0.5"></div>
+    <button onclick="fitView()" class="p-2 hover:bg-slate-100 rounded-lg font-medium">Fit</button>
+  </footer>
+
+  <!-- ==================== TEMPLATE MODAL ==================== -->
+  <div id="template-modal" class="hidden absolute inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-6">
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-2xl max-w-2xl w-full p-6 flex flex-col gap-4">
+      <div class="flex justify-between items-center border-b pb-3">
+        <h3 class="font-bold text-lg text-slate-900">Miro Enterprise Framework Catalog</h3>
+        <button onclick="document.getElementById('template-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">✕</button>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div onclick="deployFramework('kanban')" class="border border-slate-200 hover:border-blue-500 rounded-xl p-3 cursor-pointer hover:shadow-md transition">
+          <div class="font-bold text-sm text-slate-800">Scrum Kanban</div>
+          <div class="text-[11px] text-slate-500 mt-1">Sprint board with Backlog, In-Progress, Done columns.</div>
+        </div>
+        <div onclick="deployFramework('swot')" class="border border-slate-200 hover:border-blue-500 rounded-xl p-3 cursor-pointer hover:shadow-md transition">
+          <div class="font-bold text-sm text-slate-800">SWOT Matrix</div>
+          <div class="text-[11px] text-slate-500 mt-1">4-Quadrant strategic brainstorm analysis.</div>
+        </div>
+        <div onclick="deployFramework('flowchart')" class="border border-slate-200 hover:border-blue-500 rounded-xl p-3 cursor-pointer hover:shadow-md transition">
+          <div class="font-bold text-sm text-slate-800">Decision Tree</div>
+          <div class="text-[11px] text-slate-500 mt-1">Architectural decision flow with connectors.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Primary Canvas Surface -->
+  <canvas id="canvas"></canvas>
+
+  <script>
+    // ==================== ENGINE STATE ====================
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    let camera = { x: 0, y: 0, zoom: 1 };
+    let currentTool = 'select'; // 'select', 'pen', 'highlighter', 'smart', 'eraser', 'sticky', 'shape', 'text'
+    let activeShapeType = 'rect';
+    let currentColor = '#2563eb';
+    let currentStickyBg = '#fff9b1';
+
+    let isInteracting = false;
+    let isPanning = false;
+    let startPoint = { x: 0, y: 0 };
+    let selectedObject = null;
+    let dragOffset = { x: 0, y: 0 };
+    let activeDraft = null;
+
+    // Canvas Scenegraph & Undo/Redo Engine
+    let elements = [];
+    let undoStack = [];
+    let redoStack = [];
+
+    // Facilitator State
+    let timerSeconds = 300;
+    let timerInterval = null;
+    let frames = [];
+    let currentSlideIndex = 0;
+
+    // Resizing
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      render();
+    }
+    window.addEventListener('resize', resize);
+
+    function toWorld(screenX, screenY) {
+      return {
+        x: (screenX - camera.x) / camera.zoom,
+        y: (screenY - camera.y) / camera.zoom
+      };
+    }
+
+    function toScreen(worldX, worldY) {
+      return {
+        x: (worldX * camera.zoom) + camera.x,
+        y: (worldY * camera.zoom) + camera.y
+      };
+    }
+
+    // ==================== RENDERING ENGINE ====================
+    function drawGrid() {
+      const step = 32 * camera.zoom;
+      const offsetX = camera.x % step;
+      const offsetY = camera.y % step;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.strokeStyle = '#ebecef';
+      ctx.lineWidth = 1;
+
+      for (let x = offsetX; x < canvas.width; x += step) {
+        ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+      }
+      for (let y = offsetY; y < canvas.height; y += step) {
+        ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawGrid();
+
+      ctx.save();
+      ctx.translate(camera.x, camera.y);
+      ctx.scale(camera.zoom, camera.zoom);
+
+      // Render Scene Graph
+      const renderables = activeDraft ? [...elements, activeDraft] : elements;
+      renderables.forEach(el => drawElement(el));
+
+      // Draw Selected Element Gizmo & Bounds
+      if (selectedObject && currentTool === 'select') {
+        drawBoundingHandles(selectedObject);
+      }
+
+      ctx.restore();
+      updateContextBarPosition();
+      document.getElementById('zoom-label').innerText = `${Math.round(camera.zoom * 100)}%`;
+    }
+
+    function drawElement(el) {
+      ctx.save();
+
+      // Frames / Presentation Slides
+      if (el.type === 'frame') {
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.strokeRect(el.x, el.y, el.w, el.h);
+        ctx.fillStyle = '#64748b';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.fillText(`Frame ${el.index}: ${el.title}`, el.x, el.y - 8);
+      }
+      // Vector Ink & Highlighters
+      else if (el.type === 'pen' || el.type === 'highlighter') {
+        if (el.points.length < 2) return;
+        ctx.beginPath();
+        ctx.strokeStyle = el.color;
+        ctx.lineWidth = el.type === 'highlighter' ? 16 : 3;
+        ctx.lineCap = el.type === 'highlighter' ? 'square' : 'round';
+        ctx.lineJoin = 'round';
+        if (el.type === 'highlighter') ctx.globalAlpha = 0.35;
+
+        ctx.moveTo(el.points[0].x, el.points[0].y);
+        for (let i = 1; i < el.points.length; i++) {
+          ctx.lineTo(el.points[i].x, el.points[i].y);
+        }
+        ctx.stroke();
+      }
+      // Geometric Shapes
+      else if (el.type === 'rect') {
+        ctx.strokeStyle = el.color;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = el.bg || (el.color + '12');
+        ctx.beginPath();
+        ctx.roundRect(el.x, el.y, el.w, el.h, 6);
+        ctx.fill();
+        ctx.stroke();
+        drawCenteredText(el);
+      }
+      else if (el.type === 'circle') {
+        ctx.strokeStyle = el.color;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = el.bg || (el.color + '12');
+        ctx.beginPath();
+        ctx.ellipse(el.x + el.w/2, el.y + el.h/2, Math.abs(el.w/2), Math.abs(el.h/2), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        drawCenteredText(el);
+      }
+      else if (el.type === 'rhombus') {
+        ctx.strokeStyle = el.color;
+        ctx.lineWidth = 2;
+        ctx.fillStyle = el.bg || (el.color + '12');
+        ctx.beginPath();
+        ctx.moveTo(el.x + el.w/2, el.y);
+        ctx.lineTo(el.x + el.w, el.y + el.h/2);
+        ctx.lineTo(el.x + el.w/2, el.y + el.h);
+        ctx.lineTo(el.x, el.y + el.h/2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        drawCenteredText(el);
+      }
+      // Sticky Notes (Matches Screenshot)
+      else if (el.type === 'sticky') {
+        ctx.fillStyle = el.bg || '#fff9b1';
+        ctx.shadowColor = 'rgba(0,0,0,0.08)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 4;
+        ctx.fillRect(el.x, el.y, el.w, el.h);
+        ctx.shadowColor = 'transparent';
+
+        // Sticky Content Text
+        ctx.fillStyle = el.bg === '#1e293b' ? '#ffffff' : '#1e1e1e';
+        const fontSize = el.fontSize || 16;
+        ctx.font = `${el.bold ? 'bold' : 'normal'} ${fontSize}px Inter, sans-serif`;
+        wrapText(ctx, el.text || '', el.x + 14, el.y + 24, el.w - 28, fontSize * 1.25);
+
+        // Render Tags if any
+        if (el.tag) {
+          ctx.fillStyle = '#3b82f6';
+          ctx.beginPath();
+          ctx.roundRect(el.x + 10, el.y + el.h - 22, 60, 16, 4);
+          ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillText(el.tag, el.x + 16, el.y + el.h - 10);
+        }
+      }
+      // Vector Line / Orthogonal Connectors
+      else if (['line', 'arrow', 'elbow-arrow'].includes(el.type)) {
+        ctx.strokeStyle = el.color || '#2563eb';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        if (el.type === 'elbow-arrow') {
+          const midX = el.x1 + (el.x2 - el.x1) / 2;
+          ctx.moveTo(el.x1, el.y1);
+          ctx.lineTo(midX, el.y1);
+          ctx.lineTo(midX, el.y2);
+          ctx.lineTo(el.x2, el.y2);
+        } else {
+          ctx.moveTo(el.x1, el.y1);
+          ctx.lineTo(el.x2, el.y2);
+        }
+        ctx.stroke();
+
+        if (el.type === 'arrow' || el.type === 'elbow-arrow') {
+          const angle = Math.atan2(el.y2 - (el.type === 'elbow-arrow' ? el.y2 : el.y1), el.x2 - (el.type === 'elbow-arrow' ? (el.x1 + (el.x2 - el.x1)/2) : el.x1));
+          ctx.fillStyle = el.color;
+          ctx.beginPath();
+          ctx.moveTo(el.x2, el.y2);
+          ctx.lineTo(el.x2 - 12 * Math.cos(angle - Math.PI / 6), el.y2 - 12 * Math.sin(angle - Math.PI / 6));
+          ctx.lineTo(el.x2 - 12 * Math.cos(angle + Math.PI / 6), el.y2 - 12 * Math.sin(angle + Math.PI / 6));
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawCenteredText(el) {
+      if (!el.text) return;
+      ctx.fillStyle = '#1e1e1e';
+      ctx.font = '14px Inter, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(el.text, el.x + el.w/2, el.y + el.h/2);
+    }
+
+    function drawBoundingHandles(el) {
+      const b = getBounds(el);
+      ctx.save();
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4);
+
+      // Miro style 4 corner pill handles
+      const handleSize = 6;
+      ctx.fillStyle = '#ffffff';
+      [
+        { x: b.x - 2, y: b.y - 2 },
+        { x: b.x + b.w + 2, y: b.y - 2 },
+        { x: b.x - 2, y: b.y + b.h + 2 },
+        { x: b.x + b.w + 2, y: b.y + b.h + 2 }
+      ].forEach(pt => {
+        ctx.fillRect(pt.x - handleSize/2, pt.y - handleSize/2, handleSize, handleSize);
+        ctx.strokeRect(pt.x - handleSize/2, pt.y - handleSize/2, handleSize, handleSize);
+      });
+      ctx.restore();
+    }
+
+    function getBounds(el) {
+      if (['sticky', 'rect', 'circle', 'rhombus', 'triangle', 'frame'].includes(el.type)) {
+        return { x: el.x, y: el.y, w: el.w, h: el.h };
+      }
+      if (['line', 'arrow', 'elbow-arrow'].includes(el.type)) {
+        return {
+          x: Math.min(el.x1, el.x2),
+          y: Math.min(el.y1, el.y2),
+          w: Math.abs(el.x2 - el.x1) || 10,
+          h: Math.abs(el.y2 - el.y1) || 10
+        };
+      }
+      if (el.type === 'pen' || el.type === 'highlighter') {
+        const xs = el.points.map(p => p.x);
+        const ys = el.points.map(p => p.y);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+      }
+      return { x: 0, y: 0, w: 0, h: 0 };
+    }
+
+    function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+      const words = (text || '').split(' ');
+      let line = '';
+      for (let n = 0; n < words.length; n++) {
+        const test = line + words[n] + ' ';
+        if (ctx.measureText(test).width > maxWidth && n > 0) {
+          ctx.fillText(line, x, y);
+          line = words[n] + ' ';
+          y += lineHeight;
+        } else {
+          line = test;
+        }
+      }
+      ctx.fillText(line, x, y);
+    }
+
+    // ==================== POINTER & EVENT ENGINE ====================
+    canvas.addEventListener('pointerdown', (e) => {
+      const worldPos = toWorld(e.clientX, e.clientY);
+      startPoint = worldPos;
+
+      if (e.button === 1 || e.shiftKey || (currentTool === 'select' && !hitTest(worldPos))) {
+        isPanning = true;
+        startPoint = { x: e.clientX - camera.x, y: e.clientY - camera.y };
+        selectedObject = null;
+        render();
+        return;
+      }
+
+      isInteracting = true;
+
+      if (currentTool === 'select') {
+        const hit = hitTest(worldPos);
+        if (hit && !hit.locked) {
+          selectedObject = hit;
+          dragOffset = { x: worldPos.x - (hit.x || hit.x1 || 0), y: worldPos.y - (hit.y || hit.y1 || 0) };
+        } else {
+          selectedObject = null;
+        }
+      }
+      else if (['pen', 'highlighter', 'smart'].includes(currentTool)) {
+        activeDraft = { type: currentTool === 'highlighter' ? 'highlighter' : 'pen', points: [worldPos], color: currentColor };
+      }
+      else if (currentTool === 'shape') {
+        if (['line', 'arrow', 'elbow-arrow'].includes(activeShapeType)) {
+          activeDraft = { type: activeShapeType, x1: worldPos.x, y1: worldPos.y, x2: worldPos.x, y2: worldPos.y, color: currentColor };
+        } else {
+          activeDraft = { type: activeShapeType, x: worldPos.x, y: worldPos.y, w: 0, h: 0, color: currentColor };
+        }
+      }
+      else if (currentTool === 'sticky') {
+        recordHistory();
+        const newSticky = {
+          type: 'sticky',
+          x: worldPos.x - 70,
+          y: worldPos.y - 70,
+          w: 140,
+          h: 140,
+          bg: currentStickyBg,
+          text: 'New Sticky Note',
+          fontSize: 18,
+          bold: false
+        };
+        elements.push(newSticky);
+        selectedObject = newSticky;
+        setPrimaryTool('select');
+      }
+      else if (currentTool === 'eraser') {
+        const hit = hitTest(worldPos);
+        if (hit) {
+          recordHistory();
+          elements = elements.filter(el => el !== hit);
+          selectedObject = null;
+        }
+      }
+      render();
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (isPanning) {
+        camera.x = e.clientX - startPoint.x;
+        camera.y = e.clientY - startPoint.y;
+        render();
+        return;
+      }
+
+      const worldPos = toWorld(e.clientX, e.clientY);
+
+      if (isInteracting) {
+        if (currentTool === 'select' && selectedObject) {
+          const dx = worldPos.x - dragOffset.x;
+          const dy = worldPos.y - dragOffset.y;
+          if (selectedObject.x !== undefined) {
+            selectedObject.x = dx; selectedObject.y = dy;
+          } else if (selectedObject.x1 !== undefined) {
+            const w = selectedObject.x2 - selectedObject.x1;
+            const h = selectedObject.y2 - selectedObject.y1;
+            selectedObject.x1 = dx; selectedObject.y1 = dy;
+            selectedObject.x2 = dx + w; selectedObject.y2 = dy + h;
+          }
+        }
+        else if (activeDraft && (activeDraft.type === 'pen' || activeDraft.type === 'highlighter')) {
+          activeDraft.points.push(worldPos);
+        }
+        else if (activeDraft && activeDraft.type === activeShapeType) {
+          if (['line', 'arrow', 'elbow-arrow'].includes(activeDraft.type)) {
+            activeDraft.x2 = worldPos.x; activeDraft.y2 = worldPos.y;
+          } else {
+            activeDraft.w = worldPos.x - activeDraft.x;
+            activeDraft.h = worldPos.y - activeDraft.y;
+          }
+        }
+        render();
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (isPanning) isPanning = false;
+      if (isInteracting && activeDraft) {
+        recordHistory();
+
+        // SMART DRAWING ENGINE: Automatic Shape Recognizer
+        if (currentTool === 'smart' && activeDraft.points) {
+          const recognized = detectSmartShape(activeDraft.points);
+          elements.push(recognized);
+        } else {
+          elements.push(activeDraft);
+        }
+        activeDraft = null;
+      }
+      isInteracting = false;
+      render();
+    });
+
+    // ==================== SMART DRAWING MACHINE RECOGNIZER ====================
+    // Analyzes path bounding aspect ratio and path start/end closure to identify Circles, Rectangles, Lines
+    function detectSmartShape(points) {
+      const xs = points.map(p => p.x);
+      const ys = points.map(p => p.y);
+      const minX = Math.min(...xs), maxX = Math.max(...xs);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const w = maxX - minX;
+      const h = maxY - minY;
+      const start = points[0];
+      const end = points[points.length - 1];
+      const distance = Math.hypot(end.x - start.x, end.y - start.y);
+
+      // If stroke is closed
+      if (distance < 35 && points.length > 8) {
+        const ratio = w / h;
+        if (ratio > 0.8 && ratio < 1.25) {
+          return { type: 'circle', x: minX, y: minY, w: w, h: h, color: currentColor, text: '' };
+        }
+        return { type: 'rect', x: minX, y: minY, w: w, h: h, color: currentColor, text: '' };
+      }
+
+      // If open, classify as Line / Arrow
+      return { type: 'arrow', x1: start.x, y1: start.y, x2: end.x, y2: end.y, color: currentColor };
+    }
+
+    // Double-click to Edit Text
+    canvas.addEventListener('dblclick', (e) => {
+      const worldPos = toWorld(e.clientX, e.clientY);
+      const hit = hitTest(worldPos);
+      if (hit) {
+        const val = prompt('Edit Element Content:', hit.text || '');
+        if (val !== null) {
+          recordHistory();
+          hit.text = val;
+          render();
+        }
+      }
+    });
+
+    function hitTest(pt) {
+      for (let i = elements.length - 1; i >= 0; i--) {
+        const el = elements[i];
+        const b = getBounds(el);
+        if (pt.x >= b.x && pt.x <= b.x + b.w && pt.y >= b.y && pt.y <= b.y + b.h) {
+          return el;
+        }
+      }
+      return null;
+    }
+
+    // ==================== CONTEXTUAL EDITING BAR (Screenshot 1 & 4) ====================
+    function updateContextBarPosition() {
+      const bar = document.getElementById('contextual-bar');
+      if (!selectedObject || currentTool !== 'select') {
+        bar.classList.add('hidden');
+        return;
+      }
+      const b = getBounds(selectedObject);
+      const screenPos = toScreen(b.x + b.w/2, b.y);
+
+      bar.classList.remove('hidden');
+      bar.style.transform = `translate(${screenPos.x}px, ${screenPos.y - 54}px) translate(-50%, 0)`;
+
+      // Sync colors
+      document.getElementById('ctx-color-preview').style.backgroundColor = selectedObject.bg || selectedObject.color || '#fff9b1';
+      document.getElementById('ctx-lock').innerHTML = selectedObject.locked ? '<i class="fa-solid fa-lock text-rose-500 text-xs"></i>' : '<i class="fa-solid fa-unlock text-xs"></i>';
+    }
+
+    function toggleFormat(type) {
+      if (!selectedObject) return;
+      recordHistory();
+      if (type === 'bold') selectedObject.bold = !selectedObject.bold;
+      render();
+    }
+
+    function updateSelectedTextSize(size) {
+      if (!selectedObject) return;
+      recordHistory();
+      selectedObject.fontSize = parseInt(size);
+      render();
+    }
+
+    function toggleColorFlyout() {
+      document.getElementById('color-flyout').classList.toggle('hidden');
+    }
+
+    function applyElementColor(hex) {
+      if (!selectedObject) return;
+      recordHistory();
+      selectedObject.bg = hex;
+      selectedObject.color = hex;
+      document.getElementById('color-flyout').classList.add('hidden');
+      render();
+    }
+
+    function toggleLockSelected() {
+      if (!selectedObject) return;
+      selectedObject.locked = !selectedObject.locked;
+      render();
+    }
+
+    function deleteSelected() {
+      if (!selectedObject) return;
+      recordHistory();
+      elements = elements.filter(el => el !== selectedObject);
+      selectedObject = null;
+      render();
+    }
+
+    function addTagPrompt() {
+      if (!selectedObject) return;
+      const tag = prompt('Enter Tag Label (e.g. In-Review, Priority):', 'Feature');
+      if (tag) {
+        recordHistory();
+        selectedObject.tag = tag;
+        render();
+      }
+    }
+
+    // ==================== MIRO AI & AUTOMATION ENGINE ====================
+    function runAIAssistant() {
+      const stickies = elements.filter(el => el.type === 'sticky');
+      if (stickies.length === 0) {
+        alert('Miro AI: Place a few sticky notes on the canvas first to summarize or cluster them!');
+        return;
+      }
+
+      const clusterX = 250;
+      const clusterY = 150;
+      recordHistory();
+
+      // Cluster & Synthesize
+      elements.push({
+        type: 'frame',
+        x: clusterX - 20,
+        y: clusterY - 40,
+        w: 360,
+        h: 280,
+        index: 1,
+        title: 'Miro AI: Synthesized Insights'
+      });
+
+      elements.push({
+        type: 'sticky',
+        x: clusterX,
+        y: clusterY,
+        w: 150,
+        h: 150,
+        bg: '#f3e8ff',
+        text: 'AI Summary: High user interest in real-time speed, smart drawing tools, and cross-platform sync.',
+        bold: true,
+        tag: 'Synthesis'
+      });
+
+      render();
+      alert('Miro AI has clustered themes and generated an executive synthesis card!');
+    }
+
+    // ==================== FACILITATOR PRESENTATION ENGINE ====================
+    function createFrameContainer() {
+      const world = toWorld(canvas.width / 2 - 250, canvas.height / 2 - 175);
+      recordHistory();
+      const newFrame = {
+        type: 'frame',
+        x: world.x,
+        y: world.y,
+        w: 500,
+        h: 350,
+        index: frames.length + 1,
+        title: `Slide Section ${frames.length + 1}`
+      };
+      frames.push(newFrame);
+      elements.push(newFrame);
+      render();
+    }
+
+    function togglePresentationMode() {
+      if (frames.length === 0) {
+        alert('Create a Frame container first using the Frame tool!');
+        return;
+      }
+      const activeFrame = frames[currentSlideIndex % frames.length];
+      currentSlideIndex++;
+
+      // Smoothly focus camera onto slide frame
+      camera.zoom = 1.1;
+      camera.x = (canvas.width / 2) - (activeFrame.x + activeFrame.w/2) * camera.zoom;
+      camera.y = (canvas.height / 2) - (activeFrame.y + activeFrame.h/2) * camera.zoom;
+      render();
+    }
+
+    function toggleTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        document.getElementById('timer-btn').classList.remove('bg-rose-50', 'text-rose-600');
+        return;
+      }
+      document.getElementById('timer-btn').classList.add('bg-rose-50', 'text-rose-600');
+      timerInterval = setInterval(() => {
+        timerSeconds--;
+        const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+        const s = String(timerSeconds % 60).padStart(2, '0');
+        document.getElementById('timer-display').innerText = `${m}:${s}`;
+        if (timerSeconds <= 0) {
+          clearInterval(timerInterval);
+          alert('Facilitator Timer Finished!');
+        }
+      }, 1000);
+    }
+
+    function followLeader() {
+      camera = { x: 50, y: 50, zoom: 0.9 };
+      render();
+    }
+
+    // ==================== TEMPLATE INGESTION ====================
+    function openTemplateCatalog() {
+      document.getElementById('template-modal').classList.remove('hidden');
+    }
+
+    function deployFramework(type) {
+      document.getElementById('template-modal').classList.add('hidden');
+      recordHistory();
+      const origin = toWorld(canvas.width/3, canvas.height/4);
+
+      if (type === 'kanban') {
+        const cols = ['Backlog', 'In Progress', 'Done'];
+        cols.forEach((col, idx) => {
+          elements.push({
+            type: 'rect',
+            x: origin.x + (idx * 210),
+            y: origin.y,
+            w: 200,
+            h: 380,
+            color: '#94a3b8',
+            bg: '#f8fafc',
+            text: col
+          });
+          elements.push({
+            type: 'sticky',
+            x: origin.x + (idx * 210) + 20,
+            y: origin.y + 50,
+            w: 160,
+            h: 100,
+            bg: '#fff9b1',
+            text: `Sprint Task ${idx + 1}`
+          });
+        });
+      }
+      render();
+    }
+
+    function openBulkStickyDialog() {
+      const raw = prompt('Enter items separated by comma for Bulk creation:', 'Design, Prototype, Testing, Launch');
+      if (raw) {
+        recordHistory();
+        const items = raw.split(',');
+        const origin = toWorld(canvas.width / 2 - 200, canvas.height / 2 - 100);
+        items.forEach((txt, i) => {
+          elements.push({
+            type: 'sticky',
+            x: origin.x + (i % 3) * 160,
+            y: origin.y + Math.floor(i / 3) * 160,
+            w: 140,
+            h: 140,
+            bg: currentStickyBg,
+            text: txt.trim()
+          });
+        });
+        closeLeftFlyouts();
+        render();
+      }
+    }
+
+    // ==================== GOOGLE AUTHENTICATION HANDLER ====================
+    function handleGoogleCredentialResponse(response) {
+      // Decode JWT Payload
+      try {
+        const base64Url = response.credential.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+        const user = JSON.parse(jsonPayload);
+
+        // Update UI State with Real Identity
+        document.getElementById('google-auth-container').classList.add('hidden');
+        document.getElementById('user-profile-badge').classList.remove('hidden');
+        document.getElementById('user-avatar').src = user.picture;
+        document.getElementById('user-name').innerText = user.given_name;
+      } catch (err) {
+        console.error("Auth Decode Error", err);
+      }
+    }
+
+    // ==================== TOOLBAR FLYOUTS ====================
+    function closeLeftFlyouts() {
+      ['pen', 'sticky', 'shapes'].forEach(id => document.getElementById(`flyout-${id}`).classList.add('hidden'));
+    }
+
+    function toggleLeftFlyout(type) {
+      const el = document.getElementById(`flyout-${type}`);
+      const wasHidden = el.classList.contains('hidden');
+      closeLeftFlyouts();
+      if (wasHidden) {
+        el.classList.remove('hidden');
+        if (type === 'pen') setPrimaryTool('pen');
+        if (type === 'sticky') setPrimaryTool('sticky');
+        if (type === 'shapes') setPrimaryTool('shape');
+      }
+    }
+
+    function setPrimaryTool(t) {
+      currentTool = t;
+      document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('tool-active'));
+      document.getElementById(`btn-${t}`)?.classList.add('tool-active');
+      if (t === 'select' || t === 'text') closeLeftFlyouts();
+    }
+
+    function setDrawingSubTool(st) {
+      currentTool = st;
+      document.querySelectorAll('#flyout-pen button').forEach(b => b.classList.remove('bg-blue-50', 'text-blue-600'));
+      document.getElementById(`sub-${st}`)?.classList.add('bg-blue-50', 'text-blue-600');
+    }
+
+    function setStrokeColor(c) { currentColor = c; }
+    function pickStickyColor(bg) { currentStickyBg = bg; setPrimaryTool('sticky'); closeLeftFlyouts(); }
+    function pickShape(s) { activeShapeType = s; setPrimaryTool('shape'); closeLeftFlyouts(); }
+
+    // Navigation and Undo/Redo
+    function recordHistory() {
+      undoStack.push(JSON.stringify(elements));
+      redoStack = [];
+    }
+
+    function undo() {
+      if (!undoStack.length) return;
+      redoStack.push(JSON.stringify(elements));
+      elements = JSON.parse(undoStack.pop());
+      selectedObject = null;
+      render();
+    }
+
+    function redo() {
+      if (!redoStack.length) return;
+      undoStack.push(JSON.stringify(elements));
+      elements = JSON.parse(redoStack.pop());
+      render();
+    }
+
+    function zoomStep(delta) {
+      const newZoom = Math.min(Math.max(0.15, camera.zoom * (1 + delta)), 4);
+      camera.zoom = newZoom;
+      render();
+    }
+
+    function fitView() {
+      camera = { x: 0, y: 0, zoom: 1 };
+      render();
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(elements, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'miro-board.json';
+      a.click();
+    }
+
+    // Wheel Zooming
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+      const newZoom = Math.min(Math.max(0.15, camera.zoom * factor), 4);
+      camera.x = e.clientX - (e.clientX - camera.x) * (newZoom / camera.zoom);
+      camera.y = e.clientY - (e.clientY - camera.y) * (newZoom / camera.zoom);
+      camera.zoom = newZoom;
+      render();
+    }, { passive: false });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') { e.preventDefault(); redo(); }
+      if (e.key === 'v') setPrimaryTool('select');
+      if (e.key === 'p') toggleLeftFlyout('pen');
+      if (e.key === 'n') toggleLeftFlyout('sticky');
+      if (e.key === 'r') { activeShapeType = 'rect'; setPrimaryTool('shape'); }
+      if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+    });
+
+    resize();
+  </script>
+</body>
+</html>
